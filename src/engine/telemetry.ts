@@ -6,7 +6,7 @@ export type SceneId = 'kickflip' | 'ramp';
 
 export const SCENES: { id: SceneId; label: string; title: string; period: number }[] = [
   { id: 'kickflip', label: 'Kickflip', title: 'Kickflip sequence', period: DEFAULT_CONSTANTS.PERIOD },
-  { id: 'ramp', label: 'Ramp', title: 'Quarter-pipe launch', period: RAMP_PERIOD },
+  { id: 'ramp', label: 'Ramp', title: 'C-ramp launch', period: RAMP_PERIOD },
 ];
 
 export const periodOf = (id: SceneId) => SCENES.find((s) => s.id === id)!.period;

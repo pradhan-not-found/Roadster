@@ -2,24 +2,100 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Roadster Kickflip — The Future is Wild</title>
-    <meta name="description" content="Vector 3D wireframe animation of the Tesla Roadster performing a cold-gas thruster kickflip over the Tesla fleet: Model 3, Semi, Model Y, and Cybertruck." />
-    <meta property="og:title" content="Roadster Kickflip — The Future is Wild" />
-    <meta property="og:description" content="Vector 3D wireframe animation of the Tesla Roadster performing an impossible kickflip." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <title>Roadster — Kickflip &amp; C-Ramp Launch with Live Telemetry</title>
+    <meta
+      name="description"
+      content="An interactive line-art Tesla Roadster that kickflips over the fleet and launches off a C-shaped ramp on cold-gas thrusters, with live G-force, altitude and attitude telemetry. Built with React, TypeScript and hand-written SVG."
+    />
+    <meta name="keywords" content="Tesla Roadster, Roadster kickflip, Roadster ramp, cold gas thrusters, SpaceX package, SVG animation, isometric animation, telemetry, React, TypeScript" />
+    <meta name="author" content="Souradeep Pradhan" />
+    <meta name="creator" content="Souradeep Pradhan" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://pradhan-not-found.github.io/Roadster/" />
+
+    <!-- Icons -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="400x400" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#08090a" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta property="og:site_name" content="Roadster" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://pradhan-not-found.github.io/Roadster/" />
+    <meta property="og:title" content="Roadster — The Future is Wild" />
+    <meta
+      property="og:description"
+      content="A Tesla Roadster kickflips over the fleet and launches off a C-shaped ramp on cold-gas thrusters, with live telemetry from every frame."
+    />
+    <meta property="og:image" content="https://pradhan-not-found.github.io/Roadster/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Line-art Tesla Roadster leaving a C-shaped ramp upside down beside a steel gantry" />
+
+    <!-- X / Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@bysoura" />
+    <meta name="twitter:creator" content="@bysoura" />
+    <meta name="twitter:title" content="Roadster — The Future is Wild" />
+    <meta
+      name="twitter:description"
+      content="A Tesla Roadster kickflips over the fleet and launches off a C-shaped ramp on cold-gas thrusters, with live telemetry."
+    />
+    <meta name="twitter:image" content="https://pradhan-not-found.github.io/Roadster/og-image.png" />
+    <meta name="twitter:image:alt" content="Line-art Tesla Roadster leaving a C-shaped ramp upside down beside a steel gantry" />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Roadster",
+        "alternateName": "Roadster Kickflip",
+        "url": "https://pradhan-not-found.github.io/Roadster/",
+        "description": "An interactive line-art Tesla Roadster that kickflips over the fleet and launches off a C-shaped ramp on cold-gas thrusters, with live G-force, altitude and attitude telemetry.",
+        "image": "https://pradhan-not-found.github.io/Roadster/og-image.png",
+        "applicationCategory": "EntertainmentApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires a modern browser with JavaScript and SVG",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "author": {
+          "@type": "Person",
+          "name": "Souradeep Pradhan",
+          "url": "https://souradeep.me/",
+          "sameAs": ["https://x.com/bysoura", "https://github.com/pradhan-not-found"]
+        },
+        "codeRepository": "https://github.com/pradhan-not-found/Roadster",
+        "license": "https://opensource.org/licenses/MIT"
+      }
+    </script>
+
+    <link rel="preload" href="/font/Universal-Sans-Display-400.woff2" as="font" type="font/woff2" crossorigin />
+
+    <!-- Apply the saved theme before first paint -->
     <script>
       try {
-        const t = localStorage.getItem("roadster-theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        const t =
+          localStorage.getItem('theme') ||
+          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = t;
       } catch (e) {}
     </script>
   </head>
   <body>
+    <noscript>
+      <p style="font-family: system-ui, sans-serif; text-align: center; margin-top: 40vh">
+        Roadster is an interactive animation and needs JavaScript to run.
+      </p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

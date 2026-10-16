@@ -9,6 +9,9 @@ import {
   RAMP_PERIOD,
   APEX,
   LIP_POINT,
+  OVERHANG,
+  WALL_X,
+  backAt,
   PIV,
   U_LIP,
   U_LAND,
@@ -44,6 +47,8 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     jets: SVGPathElement;
     trail: SVGPathElement;
     body: SVGGElement;
+    car: SVGGElement;
+    slabTop: SVGGElement;
     dust: SVGPathElement[];
     flight: Point3D[];
     P: (p: Point3D) => Point2D;
@@ -58,9 +63,15 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
   const drawFrame = useCallback((u: number, now: number) => {
     const sc = sceneRefs.current;
     if (!sc) return;
-    const { RS, jets, trail, body, dust, flight, P, VIEW } = sc;
+    const { RS, jets, trail, body, car, slabTop, dust, flight, P, VIEW } = sc;
 
     const q = rampPose(u);
+    // Riding under the curl, the track hides the car; otherwise the car is in front
+    const under = q.phase === 'Climb' && q.pitch > OVERHANG;
+    if (under !== (car.nextSibling === slabTop)) {
+      if (under) slabTop.before(car);
+      else slabTop.after(car);
+    }
     const fr = frame([q.c[0], q.c[1], q.c[2] - PIV], PIV, q.yaw, q.pitch, q.roll);
     renderVehicle(RS, fr, -q.dist * 0.3, body, P, VIEW);
 
@@ -133,10 +144,12 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     if (!svg) return;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-    const { XA, X0, RR, HALF, XLAND } = RAMP;
-    const LZ = LIP_POINT.z;
-    const XF = X0 + RR + 3; // front truss column, just behind the steepest point
-    const XR = XF + TRUSS; // rear truss column
+    const { XA, X0, HALF, XLAND } = RAMP;
+    const XW = WALL_X;
+    const XF = XW + 3; // front tower column, just behind the wall
+    const XR = XF + TRUSS; // rear tower column
+    const ZTOP = LIP_POINT.z + 7; // top of the gantry
+    const XBEAM = LIP_POINT.x - 3; // overhead beam reaches out over the lip
 
     // Side-on camera from the run-up side, so the riding surface faces the viewer
     const cam: CameraState = { S: 1, ox: 0, oy: 0 };
@@ -144,14 +157,14 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
 
     // Framed on the ramp and touchdown zone; the long run-up bleeds off the left edge
     const bound: Point3D[] = [
-      [-70, -30, -4],
+      [-80, -30, -4],
       [110, 30, -4],
-      [-70, 30, -4],
+      [-80, 30, -4],
       [110, -30, -4],
-      [XR, -HALF, LZ + 3],
-      [XR, HALF, LZ + 3],
-      [LIP_POINT.x - PIV, 0, APEX + 16],
-      [XLAND, 0, APEX + 8],
+      [XR, -HALF, ZTOP],
+      [XR, HALF, ZTOP],
+      [XBEAM - 14, 0, APEX + 8],
+      [XLAND, 0, APEX + 4],
     ];
     const b = bound.map(P);
     const xs = b.map((p) => p[0]);
@@ -166,10 +179,9 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     cam.ox = 200 - (Math.max(...cx) + Math.min(...cx)) / 2;
     cam.oy = 162 - (Math.max(...cy) + Math.min(...cy)) / 2;
 
-    // Edge fade
+    // Edge fade, starting inside the frame so the run-up never ends on a hard edge
     const defs = mk('defs', {}, svg);
-    // Fade starts inside the framed area so the run-up never ends on a hard edge
-    const g0 = P([-95, 0, 0]);
+    const g0 = P([-105, 0, 0]);
     const g1 = P([150, 0, 0]);
     const grad = mk(
       'linearGradient',
@@ -178,7 +190,7 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     );
     [
       [0, 0],
-      [0.22, 1],
+      [0.2, 1],
       [0.85, 1],
       [1, 0],
     ].forEach(([o, a]) => mk('stop', { offset: o, 'stop-color': '#fff', 'stop-opacity': a }, grad));
@@ -187,6 +199,7 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
 
     const scene = mk('g', { mask: 'url(#rp-mask)' }, svg);
     const quad = (pts: Point3D[]) => poly(pts.map(P));
+    const line = (p: Point3D, q: Point3D) => open([P(p), P(q)]);
 
     // Ground deck
     mk(
@@ -212,10 +225,10 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     // Run-up lane edge lights and touchdown pad
     mk(
       'path',
-      { class: 'nf led dots', d: open([P([XA, -HALF, 0]), P([X0, -HALF, 0])]) + open([P([XA, HALF, 0]), P([X0, HALF, 0])]) },
+      { class: 'nf led dots', d: line([XA, -HALF, 0], [X0, -HALF, 0]) + line([XA, HALF, 0], [X0, HALF, 0]) },
       scene
     );
-    mk('path', { class: 'nf lo dash', d: open([P([XA, 0, 0]), P([X0, 0, 0])]) }, scene);
+    mk('path', { class: 'nf lo dash', d: line([XA, 0, 0], [X0, 0, 0]) }, scene);
     mk(
       'path',
       {
@@ -231,91 +244,90 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     );
     mk(
       'path',
-      {
-        class: 'nf lo',
-        d: open([P([XLAND - 5, 0, 0]), P([XLAND + 5, 0, 0])]) + open([P([XLAND, -5, 0]), P([XLAND, 5, 0])]),
-      },
+      { class: 'nf lo', d: line([XLAND - 5, 0, 0], [XLAND + 5, 0, 0]) + line([XLAND, -5, 0], [XLAND, 5, 0]) },
       scene
     );
 
-    const prof = rampProfile(36);
     // Back face of the slab, offset away from the riding side
-    const back = prof.map(([x, z, th]): [number, number] => [
+    const prof = rampProfile(56);
+    const backOf = ([x, z, th]: [number, number, number]): [number, number] => [
       x + SLAB * Math.sin(th),
       Math.max(0, z - SLAB * Math.cos(th)),
-    ]);
-    const backX = (z: number) => {
-      const a = Math.acos(clamp(1 - z / RR, -1, 1));
-      return X0 + RR * Math.sin(a) + SLAB * Math.sin(a);
-    };
+    ];
 
-    // Support truss: two columns behind the steep section, struts reaching to the slab
+    // Gantry: a braced tower behind the wall and a beam reaching over the curl
     const truss = mk('g', {}, scene);
-    const levels = [0, 12, 24, 36, 48, LZ];
+    const levels = [0, 12, 24, 36, 48, 60, ZTOP];
     let frameD = '';
     let braceD = '';
     for (const y of [-HALF, HALF]) {
-      for (const x of [XF, XR]) frameD += open([P([x, y, 0]), P([x, y, LZ + 3])]);
+      frameD += line([XF, y, 0], [XF, y, ZTOP]) + line([XR, y, 0], [XR, y, ZTOP]);
       levels.forEach((z, i) => {
-        const zz = i === levels.length - 1 ? LZ + 3 : z;
-        frameD += open([P([Math.min(backX(Math.max(z, 1)), XF), y, zz]), P([XR, y, zz])]);
-        if (i > 0) braceD += open([P([XF, y, levels[i - 1]]), P([XR, y, zz])]);
+        frameD += line([XF, y, z], [XR, y, z]);
+        if (i > 0) {
+          braceD += line([XF, y, levels[i - 1]], [XR, y, z]) + line([XR, y, levels[i - 1]], [XF, y, z]);
+        }
+        // Struts tying the lower curve back to the tower
+        if (z > 0 && z < RAMP.R1) frameD += line([backAt(z, SLAB), y, z], [XF, y, z]);
       });
+      // Overhead beam: two chords with a Warren web
+      const zb = ZTOP - 5;
+      frameD += line([XBEAM, y, ZTOP], [XR, y, ZTOP]) + line([XBEAM, y, zb], [XF, y, zb]);
+      const bays = 4;
+      for (let k = 0; k < bays; k++) {
+        const x0 = lerp(XBEAM, XF, k / bays);
+        const x1 = lerp(XBEAM, XF, (k + 1) / bays);
+        braceD += line([x0, y, zb], [(x0 + x1) / 2, y, ZTOP]) + line([(x0 + x1) / 2, y, ZTOP], [x1, y, zb]);
+      }
+      frameD += line([XBEAM, y, zb], [XBEAM, y, ZTOP]);
+      // Hangers from the beam down to the back of the curl
+      for (const k of [0.72, 0.8, 0.88, 0.96]) {
+        const [hx, hz] = backOf(prof[Math.round(k * (prof.length - 1))]);
+        if (hz < zb) frameD += line([hx, y, hz], [hx, y, zb]);
+      }
     }
-    for (let i = 1; i < levels.length; i++) {
-      const z0 = levels[i - 1];
-      const z1 = i === levels.length - 1 ? LZ + 3 : levels[i];
-      frameD += open([P([XR, -HALF, z1]), P([XR, HALF, z1])]) + open([P([XF, -HALF, z1]), P([XF, HALF, z1])]);
-      braceD += open([P([XR, -HALF, z0]), P([XR, HALF, z1])]) + open([P([XR, HALF, z0]), P([XR, -HALF, z1])]);
+    for (const z of levels.slice(1)) {
+      frameD += line([XR, -HALF, z], [XR, HALF, z]);
+      braceD += line([XR, -HALF, z - 12], [XR, HALF, z]);
     }
+    frameD += line([XBEAM, -HALF, ZTOP], [XBEAM, HALF, ZTOP]) + line([XF, -HALF, ZTOP], [XF, HALF, ZTOP]);
     mk('path', { class: 'nf lo', d: braceD }, truss);
     mk('path', { class: 'nf mid', d: frameD }, truss);
 
-    // Riding surface
-    const slab = mk('g', {}, scene);
+    // Riding surface, split so the curl can be layered over a car riding beneath it
     const near = VIEW[1] > 0 ? HALF : -HALF;
-
-    // Edge band on the camera side shows the slab's thickness
-    mk(
-      'path',
-      {
-        d: poly([
-          ...prof.map(([x, z]) => P([x, near, z])),
-          ...back.slice().reverse().map(([x, z]) => P([x, near, z])),
-        ]),
-      },
-      slab
-    );
-
-    let surf = '';
-    for (let i = 0; i < prof.length - 1; i++) {
-      const [x0, z0] = prof[i];
-      const [x1, z1] = prof[i + 1];
-      surf += quad([
-        [x0, -HALF, z0],
-        [x1, -HALF, z1],
-        [x1, HALF, z1],
-        [x0, HALF, z0],
-      ]);
-    }
-    mk('path', { class: 'fo', d: surf }, slab);
-
-    const rail = (y: number) => open(prof.map(([x, z]) => P([x, y, z])));
-    mk('path', { class: 'nf mid', d: rail(-5) + rail(5) }, slab);
-    mk(
-      'path',
-      {
-        class: 'nf hi',
-        d:
-          rail(-HALF) +
-          rail(HALF) +
-          open([P([LIP_POINT.x, -HALF, LZ]), P([LIP_POINT.x, HALF, LZ])]) +
-          open([P([X0, -HALF, 0]), P([X0, HALF, 0])]),
-      },
-      slab
-    );
-    // LED strips along both edges
-    mk('path', { class: 'nf led', d: rail(-HALF + 0.8) + rail(HALF - 0.8) }, slab);
+    const cut = prof.findIndex(([, , th]) => th * (180 / Math.PI) > OVERHANG);
+    const drawSlab = (part: [number, number, number][], g: SVGGElement, foot: boolean) => {
+      mk(
+        'path',
+        {
+          class: 'slab-edge',
+          d: poly([
+            ...part.map(([x, z]) => P([x, near, z])),
+            ...part.map(backOf).reverse().map(([x, z]) => P([x, near, z])),
+          ]),
+        },
+        g
+      );
+      let surf = '';
+      for (let i = 0; i < part.length - 1; i++) {
+        const [x0, z0] = part[i];
+        const [x1, z1] = part[i + 1];
+        surf += quad([
+          [x0, -HALF, z0],
+          [x1, -HALF, z1],
+          [x1, HALF, z1],
+          [x0, HALF, z0],
+        ]);
+      }
+      mk('path', { class: 'fo surf', d: surf }, g);
+      const rail = (y: number) => open(part.map(([x, z]) => P([x, y, z])));
+      mk('path', { class: 'nf mid', d: rail(-5) + rail(5) }, g);
+      const [ex, ez] = foot ? part[0] : part[part.length - 1];
+      mk('path', { class: 'nf hi', d: rail(-HALF) + rail(HALF) + line([ex, -HALF, ez], [ex, HALF, ez]) }, g);
+      mk('path', { class: 'nf led', d: rail(-HALF + 0.8) + rail(HALF - 0.8) }, g);
+    };
+    drawSlab(prof.slice(0, cut + 1), mk('g', {}, scene), true);
 
     const dust = [0, 1, 2].map(() => mk('path', { class: 'nf mid' }, scene));
 
@@ -328,11 +340,13 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
 
     const car = mk('g', {}, scene);
     car.setAttribute('aria-label', ROADSTER.name);
+    const slabTop = mk('g', {}, scene);
+    drawSlab(prof.slice(cut), slabTop, false);
     const jets = mk('path', { class: 'nf mid' }, car);
     const body = mk('g', {}, car);
     const RS = buildVehicle(body, ROADSTER, 'hi');
 
-    sceneRefs.current = { RS, jets, trail, body, dust, flight, P, VIEW };
+    sceneRefs.current = { RS, jets, trail, body, car, slabTop, dust, flight, P, VIEW };
     drawFrame(animRef.current.u, performance.now());
   }, [azimuthDeg, drawFrame]);
 
