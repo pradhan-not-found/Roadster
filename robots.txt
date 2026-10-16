@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://pradhan-not-found.github.io/Roadster/sitemap.xml
