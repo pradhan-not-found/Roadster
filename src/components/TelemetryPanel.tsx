@@ -59,7 +59,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
 
       <div className="tm-grid">
         <div className="tm-card">
-          <Gauge label="G-FORCE" unit="G" value={t.g} max={10} step={2} warn={7} />
+          <Gauge label="G-FORCE" unit="G" value={t.g} max={6} step={1} warn={4.5} />
         </div>
         <div className="tm-card">
           <Gauge label="ALTITUDE" unit="FT" value={t.altitudeFt} max={40} step={10} />

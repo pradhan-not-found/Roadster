@@ -32,7 +32,12 @@ const ZW = RAMP.R1 + RAMP.WALL;
 
 /** Surface point and slope (degrees) at arc length s from the foot. */
 function surface(s: number): { x: number; z: number; th: number } {
-  s = clamp(s, 0, TRACK);
+  if (s < 0) return { x: RAMP.X0 + s, z: 0, th: 0 };
+  if (s > TRACK) {
+    const lip = surface(TRACK);
+    const a = RAMP.LIP * D2R;
+    return { x: lip.x + (s - TRACK) * Math.cos(a), z: lip.z + (s - TRACK) * Math.sin(a), th: RAMP.LIP };
+  }
   if (s <= ARC1) {
     const a = s / RAMP.R1;
     return { x: RAMP.X0 + RAMP.R1 * Math.sin(a), z: RAMP.R1 * (1 - Math.cos(a)), th: a / D2R };
@@ -50,35 +55,32 @@ function surface(s: number): { x: number; z: number; th: number } {
   return { x: x + t * Math.cos(a), z: z + t * Math.sin(a), th: a / D2R };
 }
 
-// The car's centre rides PIV inside the track, so on curves it travels a
-// shorter path. Motion is timed along that centre path to keep speed smooth.
-const C1 = (RAMP.R1 - PIV) * (Math.PI / 2);
-const C2 = (RAMP.R2 - PIV) * (RAMP.LIP - 90) * D2R;
-const CTRACK = C1 + RAMP.WALL + C2 + RAMP.TOP;
+// Half the Roadster's wheelbase: the car is placed from its two axle contacts,
+// so it pitches into curves the way a real car does instead of clipping them.
+const HALF_BASE = 13.55;
 
-/** Surface arc length for a distance travelled by the car's centre. */
-function surfaceAt(c: number): number {
-  if (c <= C1) return (c * RAMP.R1) / (RAMP.R1 - PIV);
-  if (c <= C1 + RAMP.WALL) return ARC1 + (c - C1);
-  if (c <= C1 + RAMP.WALL + C2) return ARC1 + RAMP.WALL + ((c - C1 - RAMP.WALL) * RAMP.R2) / (RAMP.R2 - PIV);
-  return ARC1 + RAMP.WALL + ARC2 + (c - C1 - RAMP.WALL - C2);
+/** Car centre and pitch with both axles on the track, midpoint at arc length s. */
+function onTrack(s: number): { c: Point3D; pitch: number } {
+  const r = surface(s - HALF_BASE);
+  const f = surface(s + HALF_BASE);
+  const pitch = Math.atan2(f.z - r.z, f.x - r.x);
+  const mx = (r.x + f.x) / 2;
+  const mz = (r.z + f.z) / 2;
+  return { c: [mx - PIV * Math.sin(pitch), 0, mz + PIV * Math.cos(pitch)], pitch: pitch / D2R };
 }
 
-/** Centre of the car when its belly rests on a surface point with slope th. */
-const onSurface = (x: number, z: number, th: number): Point3D => {
-  const a = th * D2R;
-  return [x - PIV * Math.sin(a), 0, z + PIV * Math.cos(a)];
-};
-
 const LIP = surface(TRACK);
-const LIP_C = onSurface(LIP.x, LIP.z, LIP.th);
+// The car leaves once its rear axle clears the lip
+const S_EXIT = TRACK + HALF_BASE;
+const S_START = RAMP.XA - RAMP.X0;
+const LIP_C = onTrack(S_EXIT).c;
 
 const V2 = 46; // speed leaving the lip, enough to stay pinned through the curl
 const V1 = Math.sqrt(V2 * V2 + 2 * G * LIP.z); // speed at the foot
 const VZ = V2 * Math.sin(RAMP.LIP * D2R);
 
-const T_IN = (RAMP.X0 - RAMP.XA) / V1;
-const T_CLIMB = CTRACK / ((V1 + V2) / 2);
+const T_IN = -S_START / V1;
+const T_CLIMB = S_EXIT / ((V1 + V2) / 2);
 const T_RISE = VZ / G;
 const T_FALL = 1.9;
 const T_SETTLE = 0.35;
@@ -120,29 +122,26 @@ export function rampPose(u: number): RampPose {
   const dust = T < DUST_AT ? 0 : clamp((T - DUST_AT) / 1.6, 0, 1);
   const still = { yaw: 0, pitch: 0, roll: 0, jet: 0, air: false, dust };
 
-  // Approach
-  if (T < T_IN) {
-    const x = RAMP.XA + V1 * T;
-    return { ...still, c: [x, 0, PIV], dist: x - RAMP.XA, t: -1, phase: 'Approach' };
-  }
-  T -= T_IN;
-
-  // Climb: constant deceleration around the C
-  if (T < T_CLIMB) {
-    const s = V1 * T + ((V2 - V1) / (2 * T_CLIMB)) * T * T;
-    const p = surface(surfaceAt(s));
+  // Approach at speed, then decelerate up and around the C
+  if (T < T_IN + T_CLIMB) {
+    const climb = Math.max(0, T - T_IN);
+    const sMid =
+      T < T_IN
+        ? S_START + V1 * T
+        : V1 * climb + ((V2 - V1) / (2 * T_CLIMB)) * climb * climb;
+    const p = onTrack(sMid);
     return {
       ...still,
-      c: onSurface(p.x, p.z, p.th),
-      pitch: p.th,
-      dist: RAMP.X0 - RAMP.XA + s,
+      c: p.c,
+      pitch: p.pitch,
+      dist: sMid - S_START,
       t: -1,
-      phase: 'Climb',
+      phase: sMid < 0 ? 'Approach' : 'Climb',
     };
   }
-  T -= T_CLIMB;
+  T -= T_IN + T_CLIMB;
 
-  const climbed = RAMP.X0 - RAMP.XA + CTRACK;
+  const climbed = S_EXIT - S_START;
 
   // Airborne. Pitch 165 is re-expressed as yaw 180 / pitch 15 / roll 180 (same
   // attitude), so a half roll and a small pitch bring the car upright facing

@@ -45,6 +45,7 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
   const sceneRefs = useRef<{
     RS: BuiltVehicle;
     jets: SVGPathElement;
+    jetCore: SVGPathElement;
     trail: SVGPathElement;
     body: SVGGElement;
     car: SVGGElement;
@@ -63,7 +64,7 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
   const drawFrame = useCallback((u: number, now: number) => {
     const sc = sceneRefs.current;
     if (!sc) return;
-    const { RS, jets, trail, body, car, slabTop, dust, flight, P, VIEW } = sc;
+    const { RS, jets, jetCore, trail, body, car, slabTop, dust, flight, P, VIEW } = sc;
 
     const q = rampPose(u);
     // Riding under the curl, the track hides the car; otherwise the car is in front
@@ -75,8 +76,10 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     const fr = frame([q.c[0], q.c[1], q.c[2] - PIV], PIV, q.yaw, q.pitch, q.roll);
     renderVehicle(RS, fr, -q.dist * 0.3, body, P, VIEW);
 
-    // Cold gas thrusters, firing along the car's local down axis
+    // Cold gas thrusters: a flared plume per nozzle along the car's local down
+    // axis, with a bright core and a wavering tip
     let d = '';
+    let cores = '';
     if (q.jet > 0.02) {
       for (const [f, s] of [
         [-13.5, -5.5],
@@ -84,17 +87,27 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
         [13.6, -5.5],
         [13.6, 5.5],
       ]) {
-        const L = q.jet * (14 + 2.5 * Math.sin(now / 38 + f + s));
-        d += open(
-          [
-            [f - 1.2, s, 1.8],
-            [f, s, 1.8 - L],
-            [f + 1.2, s, 1.8],
-          ].map((p) => P(fr.at(p as Point3D)))
-        );
+        const t = now / 45 + f * 0.7 + s;
+        const L = q.jet * (26 + 3 * Math.sin(t));
+        const W = 1 + q.jet * (3.4 + 0.5 * Math.sin(t * 1.7));
+        const sway = 0.8 * Math.sin(t * 0.9);
+        const at = (df: number, du: number) => P(fr.at([f + df, s, 1.8 - du]));
+        d += poly([
+          at(-0.6, 0),
+          at(-W * 0.35, L * 0.3),
+          at(-W * 0.8 + sway * 0.5, L * 0.65),
+          at(-W + sway, L * 0.9),
+          at(sway * 1.4, L),
+          at(W + sway, L * 0.9),
+          at(W * 0.8 + sway * 0.5, L * 0.65),
+          at(W * 0.35, L * 0.3),
+          at(0.6, 0),
+        ]);
+        cores += open([at(0, 0), at(sway * 0.3, L * 0.4)]);
       }
     }
     jets.setAttribute('d', d);
+    jetCore.setAttribute('d', cores);
 
     // Flight path, drawn up to the car, then faded after touchdown
     if (u >= U_LIP) {
@@ -342,11 +355,12 @@ export const RampCanvas: React.FC<RampCanvasProps> = ({
     car.setAttribute('aria-label', ROADSTER.name);
     const slabTop = mk('g', {}, scene);
     drawSlab(prof.slice(cut), slabTop, false);
-    const jets = mk('path', { class: 'nf mid' }, car);
+    const jets = mk('path', { class: 'plume' }, car);
+    const jetCore = mk('path', { class: 'nf hi plume-core' }, car);
     const body = mk('g', {}, car);
     const RS = buildVehicle(body, ROADSTER, 'hi');
 
-    sceneRefs.current = { RS, jets, trail, body, car, slabTop, dust, flight, P, VIEW };
+    sceneRefs.current = { RS, jets, jetCore, trail, body, car, slabTop, dust, flight, P, VIEW };
     drawFrame(animRef.current.u, performance.now());
   }, [azimuthDeg, drawFrame]);
 
